@@ -78,7 +78,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     for (let i = 0; i < 4; i++) {
       const value: AnalyzeValueNumber = {
         name: `signature${i}`,
-        rawType: "number",
+        rawType: "integer",
         value: buffer.getInt8(offset),
         size: 1,
         address: offset,
@@ -182,7 +182,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     for (let i = 0; i < 4; i++) {
       const value: AnalyzeValueNumber = {
         name: `signature${i}`,
-        rawType: "number",
+        rawType: "integer",
         value: buffer.getInt8(offset),
         size: 1,
         address: offset,
@@ -225,7 +225,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     for (let i = 0; i < 4; i++) {
       const value: AnalyzeValueNumber = {
         name: `signature${i}`,
-        rawType: "number",
+        rawType: "integer",
         value: buffer.getInt8(offset),
         size: 1,
         address: offset,
@@ -349,7 +349,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     for (let i = 0; i < 4; i++) {
       const value: AnalyzeValueNumber = {
         name: `signature${i}`,
-        rawType: "number",
+        rawType: "integer",
         value: buffer.getInt8(offset),
         size: 1,
         address: offset,
