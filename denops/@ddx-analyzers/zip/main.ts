@@ -1,13 +1,15 @@
 import type { DdxBuffer } from "@shougo/ddx-vim/types";
 import {
   type AnalyzeResult,
-  type AnalyzeValueNumber,
+  type AnalyzeValueInteger,
   type AnalyzeValueString,
   BaseAnalyzer,
 } from "@shougo/ddx-vim/analyzer";
 import { arrayEquals, parseOneLine } from "@shougo/ddx-vim/utils";
 
 export type Params = Record<string, never>;
+
+type Signature = [number, number, number, number];
 
 export class Analyzer extends BaseAnalyzer<Params> {
   override detect(args: {
@@ -19,42 +21,43 @@ export class Analyzer extends BaseAnalyzer<Params> {
   override parse(args: {
     buffer: DdxBuffer;
   }): AnalyzeResult[] {
-    let results: AnalyzeResult[] = [];
+    const results: AnalyzeResult[] = [];
     let offset = 0;
 
     while (true) {
-      const signature = Array.from(args.buffer.getBytes(offset, 4));
+      const signature = Array.from(
+        args.buffer.getBytes(offset, 4),
+      ) as Signature;
 
       if (arrayEquals(signature, [0x50, 0x4b, 0x03, 0x04])) {
-        // ZIP_HEADER
-        [results, offset] = this.analyzeZipHeader(
+        const [, nextOffset] = this.analyzeZipHeader(
           args.buffer,
           results,
           offset,
         );
+        offset = nextOffset;
       } else if (arrayEquals(signature, [0x50, 0x4b, 0x07, 0x08])) {
-        // ZIP_HEADER(PK78)
-        [results, offset] = this.analyzeZipHeader2(
+        const [, nextOffset] = this.analyzeZipHeader2(
           args.buffer,
           results,
           offset,
         );
+        offset = nextOffset;
       } else if (arrayEquals(signature, [0x50, 0x4b, 0x01, 0x02])) {
-        // ZIP_CENTRAL_HEADER
-        [results, offset] = this.analyzeZipCentralHeader(
+        const [, nextOffset] = this.analyzeZipCentralHeader(
           args.buffer,
           results,
           offset,
         );
+        offset = nextOffset;
       } else if (arrayEquals(signature, [0x50, 0x4b, 0x05, 0x06])) {
-        // ZIP_END_HEADER
-        [results, offset] = this.analyzeZipEndHeader(
+        const [, nextOffset] = this.analyzeZipEndHeader(
           args.buffer,
           results,
           offset,
         );
+        offset = nextOffset;
       } else {
-        // UNKNOWN
         break;
       }
     }
@@ -66,6 +69,46 @@ export class Analyzer extends BaseAnalyzer<Params> {
     return {};
   }
 
+  private parseSignature(
+    buffer: DdxBuffer,
+    header: AnalyzeResult,
+    offset: number,
+  ): number {
+    for (let i = 0; i < 4; i++) {
+      header.values.push({
+        name: `signature${i}`,
+        rawType: "integer",
+        value: buffer.getInt8(offset),
+        size: 1,
+        address: offset,
+      });
+      offset += 1;
+    }
+    return offset;
+  }
+
+  private parseLine(
+    buffer: DdxBuffer,
+    header: AnalyzeResult,
+    offset: number,
+    line: string,
+  ): [AnalyzeValueInteger | AnalyzeValueString, number] {
+    const [value, nextOffset] = parseOneLine(line, buffer, offset);
+    header.values.push(value);
+    return [value, nextOffset];
+  }
+
+  private parseLineOffset(
+    buffer: DdxBuffer,
+    header: AnalyzeResult,
+    offset: number,
+    line: string,
+  ): number {
+    const [value, nextOffset] = parseOneLine(line, buffer, offset);
+    header.values.push(value);
+    return nextOffset;
+  }
+
   private analyzeZipHeader(
     buffer: DdxBuffer,
     results: AnalyzeResult[],
@@ -74,96 +117,109 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_HEADER", values: [] };
 
-    // uint8_t signature[4];
-    for (let i = 0; i < 4; i++) {
-      const value: AnalyzeValueNumber = {
-        name: `signature${i}`,
-        rawType: "integer",
-        value: buffer.getInt8(offset),
-        size: 1,
-        address: offset,
-      };
+    offset = this.parseSignature(buffer, header, offset);
 
-      header.values.push(value);
-      offset += 1;
-    }
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t version;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t flags;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t compression;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t dos_time;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t dos_date;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t crc32;",
+    );
 
-    let value, fileSize;
-    [value, offset] = parseOneLine("uint16_t version;", buffer, offset);
-    header.values.push(value);
-    [value, offset] = parseOneLine("uint16_t flags;", buffer, offset);
-    header.values.push(value);
-    [value, offset] = parseOneLine("uint16_t compression;", buffer, offset);
-    header.values.push(value);
-    [value, offset] = parseOneLine("uint16_t dos_time;", buffer, offset);
-    header.values.push(value);
-    [value, offset] = parseOneLine("uint16_t dos_date;", buffer, offset);
-    header.values.push(value);
-    [value, offset] = parseOneLine("uint32_t crc32;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    let value;
+    [value, offset] = this.parseLine(
+      buffer,
+      header,
+      offset,
       "uint32_t compressed_size;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    fileSize = (value as AnalyzeValueNumber).value;
+    const compressedSize = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = parseOneLine(
+    [value, offset] = this.parseLine(
+      buffer,
+      header,
+      offset,
       "uint32_t uncompressed_size;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    fileSize += (value as AnalyzeValueNumber).value;
+    const uncompressedSize = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = parseOneLine(
+    [value, offset] = this.parseLine(
+      buffer,
+      header,
+      offset,
       "uint16_t file_name_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    const filenameOffset = (value as AnalyzeValueNumber).value;
+    const filenameLength = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = parseOneLine(
+    [value, offset] = this.parseLine(
+      buffer,
+      header,
+      offset,
       "uint16_t extra_field_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    const dataOffset = fileSize + (value as AnalyzeValueNumber).value;
+    const extraFieldLength = (value as AnalyzeValueInteger).value;
 
-    // filename
     const filename: AnalyzeValueString = {
       name: "filename",
       rawType: "string",
-      value: buffer.getChars(offset, filenameOffset),
-      size: filenameOffset,
+      value: buffer.getChars(offset, filenameLength),
+      size: filenameLength,
       address: offset,
     };
     header.values.push(filename);
-    offset += filenameOffset;
+    offset += filenameLength;
 
-    // data
+    header.values.push({
+      name: "extra field",
+      rawType: "string",
+      value: "?",
+      address: offset,
+    });
+    offset += extraFieldLength;
+
     header.values.push({
       name: "data",
       rawType: "string",
       value: "?",
       address: offset,
     });
-    offset += dataOffset;
 
-    // Skip until PK78 if fileSize == 0
-    while (fileSize === 0) {
-      const signature = Array.from(buffer.getBytes(offset, 4));
-      if (
-        signature.length !== 4 ||
-        arrayEquals(signature, [0x50, 0x4b, 0x07, 0x08])
-      ) {
-        break;
-      }
-      offset += 1;
+    // If compressed size is unknown/zero, do not blindly skip ahead.
+    // Leave offset at the current position and continue parsing from there.
+    if (compressedSize > 0) {
+      offset += compressedSize;
+    } else if (uncompressedSize > 0) {
+      offset += uncompressedSize;
     }
 
     results.push(header);
@@ -178,36 +234,26 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_HEADER(PK78)", values: [] };
 
-    // uint8_t signature[4];
-    for (let i = 0; i < 4; i++) {
-      const value: AnalyzeValueNumber = {
-        name: `signature${i}`,
-        rawType: "integer",
-        value: buffer.getInt8(offset),
-        size: 1,
-        address: offset,
-      };
-      header.values.push(value);
-      offset += 1;
-    }
+    offset = this.parseSignature(buffer, header, offset);
 
-    let value;
-    [value, offset] = parseOneLine("uint32_t crc32;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t crc32;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint32_t compressed_size;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint32_t uncompressed_size;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
 
     results.push(header);
     return [results, offset];
@@ -221,117 +267,128 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_CENTRAL_HEADER", values: [] };
 
-    // uint8_t signature[4];
-    for (let i = 0; i < 4; i++) {
-      const value: AnalyzeValueNumber = {
-        name: `signature${i}`,
-        rawType: "integer",
-        value: buffer.getInt8(offset),
-        size: 1,
-        address: offset,
-      };
-      header.values.push(value);
-      offset += 1;
-    }
+    offset = this.parseSignature(buffer, header, offset);
+
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t version_made;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t version;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t flags;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t compression;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t dos_time;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint16_t dos_date;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t crc32;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t compressed_size;",
+    );
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t uncompressed_size;",
+    );
 
     let value;
-    [value, offset] = parseOneLine("uint16_t version_made;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint16_t version;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint16_t flags;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint16_t compression;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint16_t dos_time;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint16_t dos_date;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint32_t crc32;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine("uint32_t compressed_size;", buffer, offset);
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
-      "uint32_t uncompressed_size;",
+    [value, offset] = this.parseLine(
       buffer,
+      header,
       offset,
-    );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
       "uint16_t file_name_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    const filenameOffset = (value as AnalyzeValueNumber).value;
+    const filenameLength = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = parseOneLine(
+    [value, offset] = this.parseLine(
+      buffer,
+      header,
+      offset,
       "uint16_t extra_field_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-    const extraSize = (value as AnalyzeValueNumber).value;
+    const extraFieldLength = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t file_comment_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t disk_number_start;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t internal_file_attributes;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint32_t external_file_attributes;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
+      "uint32_t position;",
+    );
 
-    [value, offset] = parseOneLine("uint32_t position;", buffer, offset);
-    header.values.push(value);
-
-    // filename
     const filename: AnalyzeValueString = {
       name: "filename",
       rawType: "string",
-      value: buffer.getChars(offset, filenameOffset),
-      size: filenameOffset,
+      value: buffer.getChars(offset, filenameLength),
+      size: filenameLength,
       address: offset,
     };
     header.values.push(filename);
-    offset += filenameOffset;
+    offset += filenameLength;
 
-    // extra field
     header.values.push({
       name: "extra field",
       rawType: "string",
       value: "?",
       address: offset,
     });
-    offset += extraSize;
+    offset += extraFieldLength;
 
     results.push(header);
     return [results, offset];
@@ -345,68 +402,50 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_END_HEADER", values: [] };
 
-    // uint8_t signature[4];
-    for (let i = 0; i < 4; i++) {
-      const value: AnalyzeValueNumber = {
-        name: `signature${i}`,
-        rawType: "integer",
-        value: buffer.getInt8(offset),
-        size: 1,
-        address: offset,
-      };
-      header.values.push(value);
-      offset += 1;
-    }
+    offset = this.parseSignature(buffer, header, offset);
 
-    let value;
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t number_of_disks;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t disk_number_start;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t number_of_disk_entries;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t number_of_entries;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint32_t central_dir_size;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint32_t central_dir_offset;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
-
-    [value, offset] = parseOneLine(
+    offset = this.parseLineOffset(
+      buffer,
+      header,
+      offset,
       "uint16_t file_comment_length;",
-      buffer,
-      offset,
     );
-    header.values.push(value);
 
     results.push(header);
     return [results, offset];
