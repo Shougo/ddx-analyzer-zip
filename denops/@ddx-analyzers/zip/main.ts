@@ -5,7 +5,7 @@ import {
   type AnalyzeValueString,
   BaseAnalyzer,
 } from "@shougo/ddx-vim/analyzer";
-import { arrayEquals, parseOneLine } from "@shougo/ddx-vim/utils";
+import { arrayEquals, parseLine, parseLineOffset, parseOneLine } from "@shougo/ddx-vim/utils";
 
 export type Params = Record<string, never>;
 
@@ -87,28 +87,6 @@ export class Analyzer extends BaseAnalyzer<Params> {
     return offset;
   }
 
-  private parseLine(
-    buffer: DdxBuffer,
-    header: AnalyzeResult,
-    offset: number,
-    line: string,
-  ): [AnalyzeValueInteger | AnalyzeValueString, number] {
-    const [value, nextOffset] = parseOneLine(line, buffer, offset);
-    header.values.push(value);
-    return [value, nextOffset];
-  }
-
-  private parseLineOffset(
-    buffer: DdxBuffer,
-    header: AnalyzeResult,
-    offset: number,
-    line: string,
-  ): number {
-    const [value, nextOffset] = parseOneLine(line, buffer, offset);
-    header.values.push(value);
-    return nextOffset;
-  }
-
   private analyzeZipHeader(
     buffer: DdxBuffer,
     results: AnalyzeResult[],
@@ -119,37 +97,37 @@ export class Analyzer extends BaseAnalyzer<Params> {
 
     offset = this.parseSignature(buffer, header, offset);
 
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t version;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t flags;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t compression;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t dos_time;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t dos_date;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
@@ -157,7 +135,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
 
     let value;
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -165,7 +143,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
     const compressedSize = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -173,7 +151,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
     const uncompressedSize = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -181,7 +159,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
     const filenameLength = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -236,19 +214,19 @@ export class Analyzer extends BaseAnalyzer<Params> {
 
     offset = this.parseSignature(buffer, header, offset);
 
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t crc32;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t compressed_size;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
@@ -269,55 +247,55 @@ export class Analyzer extends BaseAnalyzer<Params> {
 
     offset = this.parseSignature(buffer, header, offset);
 
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t version_made;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t version;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t flags;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t compression;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t dos_time;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t dos_date;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t crc32;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t compressed_size;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
@@ -325,7 +303,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
 
     let value;
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -333,7 +311,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
     const filenameLength = (value as AnalyzeValueInteger).value;
 
-    [value, offset] = this.parseLine(
+    [value, offset] = parseLine(
       buffer,
       header,
       offset,
@@ -341,31 +319,31 @@ export class Analyzer extends BaseAnalyzer<Params> {
     );
     const extraFieldLength = (value as AnalyzeValueInteger).value;
 
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t file_comment_length;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t disk_number_start;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t internal_file_attributes;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t external_file_attributes;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
@@ -404,43 +382,43 @@ export class Analyzer extends BaseAnalyzer<Params> {
 
     offset = this.parseSignature(buffer, header, offset);
 
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t number_of_disks;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t disk_number_start;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t number_of_disk_entries;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint16_t number_of_entries;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t central_dir_size;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,
       "uint32_t central_dir_offset;",
     );
-    offset = this.parseLineOffset(
+    offset = parseLineOffset(
       buffer,
       header,
       offset,

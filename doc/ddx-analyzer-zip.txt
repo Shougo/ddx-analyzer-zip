@@ -38,7 +38,7 @@ PARAMS                                               *ddx-analyzer-zip-params*
 EXAMPLES                                           *ddx-analyzer-zip-examples*
 >vim
 	call ddx#custom#patch_global({
-	    \ 'ui': 'hex',
+	    \   'ui': 'hex',
 	    \ })
 <
 
