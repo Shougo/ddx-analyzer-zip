@@ -73,8 +73,9 @@ export class Analyzer extends BaseAnalyzer<Params> {
     buffer: DdxBuffer,
     header: AnalyzeResult,
     offset: number,
+    size: number,
   ): number {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < size; i++) {
       header.values.push({
         name: `signature${i}`,
         rawType: "integer",
@@ -95,7 +96,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_HEADER", values: [] };
 
-    offset = this.parseSignature(buffer, header, offset);
+    offset = this.parseSignature(buffer, header, offset, 4);
 
     offset = parseLineOffset(
       buffer,
