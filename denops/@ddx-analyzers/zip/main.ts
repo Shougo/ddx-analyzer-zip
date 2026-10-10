@@ -5,7 +5,7 @@ import {
   type AnalyzeValueString,
   BaseAnalyzer,
 } from "@shougo/ddx-vim/analyzer";
-import { arrayEquals, parseLine, parseLineOffset, parseOneLine } from "@shougo/ddx-vim/utils";
+import { arrayEquals, parseLine, parseLineOffset } from "@shougo/ddx-vim/utils";
 
 export type Params = Record<string, never>;
 
@@ -79,7 +79,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       header.values.push({
         name: `signature${i}`,
         rawType: "integer",
-        value: buffer.getInt8(offset),
+        value: BigInt(buffer.getInt8(offset)),
         size: 1,
         address: offset,
       });
@@ -142,7 +142,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint32_t compressed_size;",
     );
-    const compressedSize = (value as AnalyzeValueInteger).value;
+    const compressedSize = Number((value as AnalyzeValueInteger).value);
 
     [value, offset] = parseLine(
       buffer,
@@ -150,7 +150,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint32_t uncompressed_size;",
     );
-    const uncompressedSize = (value as AnalyzeValueInteger).value;
+    const uncompressedSize = Number((value as AnalyzeValueInteger).value);
 
     [value, offset] = parseLine(
       buffer,
@@ -158,7 +158,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint16_t file_name_length;",
     );
-    const filenameLength = (value as AnalyzeValueInteger).value;
+    const filenameLength = Number((value as AnalyzeValueInteger).value);
 
     [value, offset] = parseLine(
       buffer,
@@ -166,7 +166,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint16_t extra_field_length;",
     );
-    const extraFieldLength = (value as AnalyzeValueInteger).value;
+    const extraFieldLength = Number((value as AnalyzeValueInteger).value);
 
     const filename: AnalyzeValueString = {
       name: "filename",
@@ -213,7 +213,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_HEADER(PK78)", values: [] };
 
-    offset = this.parseSignature(buffer, header, offset);
+    offset = this.parseSignature(buffer, header, offset, 4);
 
     offset = parseLineOffset(
       buffer,
@@ -246,7 +246,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_CENTRAL_HEADER", values: [] };
 
-    offset = this.parseSignature(buffer, header, offset);
+    offset = this.parseSignature(buffer, header, offset, 4);
 
     offset = parseLineOffset(
       buffer,
@@ -310,7 +310,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint16_t file_name_length;",
     );
-    const filenameLength = (value as AnalyzeValueInteger).value;
+    const filenameLength = Number((value as AnalyzeValueInteger).value);
 
     [value, offset] = parseLine(
       buffer,
@@ -318,7 +318,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
       offset,
       "uint16_t extra_field_length;",
     );
-    const extraFieldLength = (value as AnalyzeValueInteger).value;
+    const extraFieldLength = Number((value as AnalyzeValueInteger).value);
 
     offset = parseLineOffset(
       buffer,
@@ -381,7 +381,7 @@ export class Analyzer extends BaseAnalyzer<Params> {
     let offset = startOffset;
     const header: AnalyzeResult = { name: "ZIP_END_HEADER", values: [] };
 
-    offset = this.parseSignature(buffer, header, offset);
+    offset = this.parseSignature(buffer, header, offset, 4);
 
     offset = parseLineOffset(
       buffer,
